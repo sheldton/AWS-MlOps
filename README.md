@@ -1,12 +1,46 @@
-# SageMaker AI — Comprehensive End-to-End Demo
+# SageMaker AI — Classroom demos
 
-A single Jupyter notebook that exercises every major Amazon SageMaker AI building block in a 90-minute classroom session: Processing → Training → Pipelines → Model Registry → Real-time Endpoints (with DataCapture) → Auto-scaling → Model Cards → Model Monitor.
+Two Jupyter notebooks, each a self-contained 90-minute classroom session against real AWS resources:
 
-**Audience:** intermediate AWS / ML engineers who want to see the full SageMaker workflow end-to-end with real (small, quota-safe) AWS resources.
+| Notebook | What it covers |
+|---|---|
+| [`sagemaker_comprehensive_demo.ipynb`](sagemaker_comprehensive_demo.ipynb) | Every major SageMaker AI building block end-to-end: Processing → Training → Pipelines → Model Registry → Real-time Endpoints (with DataCapture) → Auto-scaling → Model Cards → Model Monitor. |
+| [`sagemaker_mlops_demo.ipynb`](sagemaker_mlops_demo.ipynb) | The MLOps surfaces: Feature Store (online + offline + Athena) → Experiments → Hyperparameter Tuning (Bayesian) → Pipelines with `ConditionStep` → **Model Registry approval workflow with EventBridge → Lambda auto-deploy** → Lineage Tracking. |
+
+**Audience:** intermediate AWS / ML engineers who want to see SageMaker workflows end-to-end with real (small, quota-safe) AWS resources.
 
 ---
 
-## What it covers
+## MLOps demo (`sagemaker_mlops_demo.ipynb`)
+
+| § | Topic | Cell time |
+|---|---|---|
+| 0 | Resilient setup (boto3 + STS, defensive across SageMaker Distribution image versions) | 1 min |
+| 1 | SDK install / version pin (`sagemaker>=2.246.0,<3.0`, `pyathena`) | 1 min |
+| 2 | California Housing dataset → S3 (training CSVs + Feature-Store-shaped DataFrame) | 1 min |
+| 3 | **Feature Store** — `FeatureGroup` with online (DDB, sub-100ms) + offline (S3 + Glue + Athena) stores | 5–6 min |
+| 4 | **Experiments** — three tracked training runs (`sagemaker.experiments.Run`) for side-by-side metric comparison | 8 min |
+| 5 | **Hyperparameter Tuning** — `HyperparameterTuner(strategy="Bayesian")` over `eta` × `max_depth` × `subsample`; 4 trials, max 2 in parallel | 12–15 min |
+| 6 | **Pipeline** — `Preprocess → Train → Eval → ConditionStep` that branches on RMSE; passes go to `RegisterModel(PendingManualApproval)`, fails go to `FailStep` | 10–12 min |
+| 7 | **Model Registry approval → auto-deploy** — flip `ModelApprovalStatus="Approved"` → EventBridge rule fires → Lambda creates Model + EndpointConfig + Endpoint asynchronously → poll until `InService` → live invocation | 5–7 min |
+| 8 | **Lineage Tracking** — query the artifact graph (endpoint → model package → training/processing jobs → input artifacts), plus an Athena query against the offline Feature Store | 1 min |
+| 9 | Class discussion prompts | 5 min teaching |
+| 10 | **Cleanup** — endpoint, package + group, pipeline, feature group, S3 sweep | 1 min |
+
+Total: ~55 min cell execution + ~35 min teaching = **90 min**. Estimated cost: **~$2–3** at on-demand `us-east-1` pricing.
+
+> **Prereq specific to this notebook:** the **EventBridge rule + auto-deploy Lambda** must already be deployed in the account. The CFN template that provisions them is kept private to the classroom (it hardcodes the model package group name `mlops-pkg-group` so other Registry approvals don't trigger deployments). If you fork this notebook, you'll need to wire up your own EventBridge → Lambda chain — the rule pattern is documented inline in §7.
+
+> **Three SDK gotchas worked around in §4 + §5 + §8** (so you don't have to learn them the hard way):
+> 1. `sagemaker.experiments.Run(run_name=...)` — no dots allowed in `run_name` (TrialComponent regex `[a-zA-Z0-9](-*[a-zA-Z0-9]){0,119}`). Encode floats as integers.
+> 2. Built-in algorithm Estimators + `HyperparameterTuner` reject `metric_definitions=[...]` (`ValidationException: You can't override the metric definitions for Amazon SageMaker algorithms`). Drop it.
+> 3. `LineageQuery.query()` requires `include_edges=True` or a Filter; `EndpointContext.load(endpoint_name=...)` doesn't exist — look up by `Context.list(source_uri=endpoint_arn)`; Vertex attrs are `lineage_entity` / `lineage_source` (not `..._type`).
+
+---
+
+## Comprehensive demo (`sagemaker_comprehensive_demo.ipynb`)
+
+### What it covers
 
 | § | Topic | Cell time |
 |---|---|---|
